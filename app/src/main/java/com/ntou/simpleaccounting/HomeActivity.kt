@@ -7,10 +7,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.ntou.simpleaccounting.ui.theme.SimpleAccountingTheme
 
 class HomeActivity : ComponentActivity() {
@@ -49,6 +50,25 @@ class HomeActivity : ComponentActivity() {
         val user = auth.currentUser
         val email = user?.email ?: "No email available"
 
+        // State to hold userID
+        var userID by remember { mutableStateOf<String?>(null) }
+        val firestore = FirebaseFirestore.getInstance()
+
+        // Fetch userID from Firestore
+        LaunchedEffect(user) {
+            user?.uid?.let { uid ->
+                firestore.collection("users").document(uid).get()
+                    .addOnSuccessListener { document ->
+                        if (document != null) {
+                            userID = document.getString("userID")
+                        }
+                    }
+                    .addOnFailureListener {
+                        userID = "Failed to fetch userID"
+                    }
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -59,6 +79,8 @@ class HomeActivity : ComponentActivity() {
             Text("Welcome to the Home Screen!", style = MaterialTheme.typography.headlineMedium)
             Spacer(modifier = Modifier.height(16.dp))
             Text("Logged in as: $email", style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("User ID: ${userID ?: "Loading..."}", style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = { logout() },

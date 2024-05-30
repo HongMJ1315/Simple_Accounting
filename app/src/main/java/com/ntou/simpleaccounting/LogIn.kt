@@ -5,26 +5,20 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.ntou.simpleaccounting.ui.theme.SimpleAccountingTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.ntou.simpleaccounting.ui.theme.SimpleAccountingTheme
 
 class LoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,9 +67,11 @@ class LoginActivity : ComponentActivity() {
 @Composable
 fun LoginScreen(onLoginSuccess: () -> Unit) {
     val auth = FirebaseAuth.getInstance()
+    val firestore = FirebaseFirestore.getInstance()
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var userID by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var isLoginMode by remember { mutableStateOf(true) }
 
@@ -162,6 +158,31 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                     }
                 }
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            BasicTextField(
+                value = userID,
+                onValueChange = { userID = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Done
+                ),
+                decorationBox = { innerTextField ->
+                    Box(
+                        Modifier
+                            .padding(8.dp)
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                    ) {
+                        if (userID.isEmpty()) {
+                            Text("User ID", style = MaterialTheme.typography.bodyMedium)
+                        }
+                        innerTextField()
+                    }
+                }
+            )
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(
@@ -178,13 +199,39 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                         }
                 } else {
                     if (password == confirmPassword) {
-                        auth.createUserWithEmailAndPassword(email, password)
+                        // Check if userID is unique
+                        firestore.collection("users").whereEqualTo("userID", userID).get()
                             .addOnCompleteListener { task ->
                                 if (task.isSuccessful) {
-                                    message = "Registration successful!"
-                                    onLoginSuccess()
+                                    if (task.result.isEmpty) {
+                                        // Register new user
+                                        auth.createUserWithEmailAndPassword(email, password)
+                                            .addOnCompleteListener { task ->
+                                                if (task.isSuccessful) {
+                                                    // Save userID in Firestore
+                                                    val user = auth.currentUser
+                                                    val userData = hashMapOf(
+                                                        "userID" to userID,
+                                                        "email" to email
+                                                    )
+                                                    firestore.collection("users").document(user!!.uid).set(userData)
+                                                        .addOnCompleteListener { userTask ->
+                                                            if (userTask.isSuccessful) {
+                                                                message = "Registration successful!"
+                                                                onLoginSuccess()
+                                                            } else {
+                                                                message = "Failed to save user data: ${userTask.exception?.message}"
+                                                            }
+                                                        }
+                                                } else {
+                                                    message = "Registration failed: ${task.exception?.message}"
+                                                }
+                                            }
+                                    } else {
+                                        message = "User ID already exists. Please choose a different one."
+                                    }
                                 } else {
-                                    message = "Registration failed: ${task.exception?.message}"
+                                    message = "Error checking User ID: ${task.exception?.message}"
                                 }
                             }
                     } else {
