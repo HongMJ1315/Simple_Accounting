@@ -9,17 +9,21 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.ntou.simpleaccounting.ui.theme.SimpleAccountingTheme
+import java.text.SimpleDateFormat
+import java.util.*
+import com.google.firebase.firestore.FieldValue
 
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             SimpleAccountingTheme {
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -31,14 +35,9 @@ class HomeActivity : ComponentActivity() {
     }
 
     private fun logout() {
-        // Log out the user
         FirebaseAuth.getInstance().signOut()
-
-        // Clear login state
         val sharedPreferences = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         sharedPreferences.edit().putBoolean("is_logged_in", false).apply()
-
-        // Redirect to LoginActivity
         val intent = Intent(this, MainActivity::class.java)
         startActivity(intent)
         finish()
@@ -50,22 +49,53 @@ class HomeActivity : ComponentActivity() {
         val user = auth.currentUser
         val email = user?.email ?: "No email available"
 
-        // State to hold userID
         var userID by remember { mutableStateOf<String?>(null) }
         val firestore = FirebaseFirestore.getInstance()
 
-        // Fetch userID from Firestore
+        var amount by remember { mutableStateOf("") }
+        var recordType by remember { mutableStateOf("Income") }
+        var records by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+
+        // State for the current date
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        var currentDate by remember { mutableStateOf(dateFormat.format(Date())) }
+
         LaunchedEffect(user) {
             user?.uid?.let { uid ->
                 firestore.collection("users").document(uid).get()
                     .addOnSuccessListener { document ->
                         if (document != null) {
                             userID = document.getString("userID")
+                            loadRecords(uid, currentDate, firestore) { loadedRecords ->
+                                records = loadedRecords
+                            }
                         }
                     }
                     .addOnFailureListener {
                         userID = "Failed to fetch userID"
                     }
+            }
+        }
+
+        fun addRecord() {
+            if (amount.isNotEmpty()) {
+                val newRecord = recordType to amount
+                records = records + newRecord
+                saveRecord(user?.uid, currentDate, firestore, newRecord)
+                amount = ""
+            }
+        }
+
+        fun changeDate(offset: Int) {
+            val calendar = Calendar.getInstance().apply {
+                time = dateFormat.parse(currentDate) ?: Date()
+                add(Calendar.DAY_OF_YEAR, offset)
+            }
+            currentDate = dateFormat.format(calendar.time)
+            user?.uid?.let { uid ->
+                loadRecords(uid, currentDate, firestore) { loadedRecords ->
+                    records = loadedRecords
+                }
             }
         }
 
@@ -82,11 +112,121 @@ class HomeActivity : ComponentActivity() {
             Spacer(modifier = Modifier.height(16.dp))
             Text("User ID: ${userID ?: "Loading..."}", style = MaterialTheme.typography.bodyMedium)
             Spacer(modifier = Modifier.height(16.dp))
+
+            Text("Date: $currentDate", style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(onClick = { changeDate(-1) }) {
+                    Text("Previous Day")
+                }
+                Button(onClick = { changeDate(1) }) {
+                    Text("Next Day")
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = amount,
+                onValueChange = {
+                    if (it.all { char -> char.isDigit() }) {
+                        amount = it
+                    }
+                },
+                label = { Text("輸入金額") },
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    keyboardType = KeyboardType.Number
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(onClick = { recordType = "Income" }) {
+                    Text("收入")
+                }
+                Button(onClick = { recordType = "Expense" }) {
+                    Text("支出")
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { addRecord() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Add Record")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                records.forEach { (type, amount) ->
+                    Text("$type: $$amount", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+            val totalIncome = records.filter { it.first == "Income" }.sumBy { it.second.toInt() }
+            val totalExpense = records.filter { it.first == "Expense" }.sumBy { it.second.toInt() }
+            val totalProfit = totalIncome - totalExpense
+
+            // 顯示總盈餘
+            Text("總盈餘: $totalProfit", style = MaterialTheme.typography.bodyMedium)
+
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Button(
                 onClick = { logout() },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Logout")
+            }
+        }
+    }
+
+    private fun loadRecords(uid: String, date: String, firestore: FirebaseFirestore, onRecordsLoaded: (List<Pair<String, String>>) -> Unit) {
+        firestore.collection("users").document(uid).collection("records").document(date).get()
+            .addOnSuccessListener { document ->
+                val loadedRecords = document["records"] as? List<*>
+                val convertedRecords = loadedRecords?.mapNotNull { record ->
+                    if (record is Map<*, *>) {
+                        val type = record["type"] as? String ?: ""
+                        val amount = record["amount"] as? String ?: ""
+                        type to amount
+                    } else {
+                        null
+                    }
+                } ?: emptyList()
+                onRecordsLoaded(convertedRecords)
+            }
+            .addOnFailureListener {
+                onRecordsLoaded(emptyList())
+            }
+    }
+
+
+
+    private fun saveRecord(uid: String?, date: String, firestore: FirebaseFirestore, record: Pair<String, String>) {
+        uid?.let {
+            val recordData = hashMapOf(
+                "type" to record.first,
+                "amount" to record.second
+            )
+            val docRef = firestore.collection("users").document(it).collection("records").document(date)
+            docRef.get().addOnSuccessListener { document ->
+                if (document.exists()) {
+                    docRef.update("records", FieldValue.arrayUnion(recordData))
+                } else {
+                    docRef.set(hashMapOf("records" to listOf(recordData)))
+                }
             }
         }
     }
