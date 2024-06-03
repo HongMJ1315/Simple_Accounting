@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,8 +19,11 @@ import com.ntou.simpleaccounting.ui.theme.SimpleAccountingTheme
 import java.text.SimpleDateFormat
 import java.util.*
 import com.google.firebase.firestore.FieldValue
+import androidx.compose.foundation.lazy.items
 
 class HomeActivity : ComponentActivity() {
+    data class Record(val type: String, val amount: String, val description: String)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -53,8 +57,9 @@ class HomeActivity : ComponentActivity() {
         val firestore = FirebaseFirestore.getInstance()
 
         var amount by remember { mutableStateOf("") }
+        var description by remember { mutableStateOf("") }
         var recordType by remember { mutableStateOf("Income") }
-        var records by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+        var records by remember { mutableStateOf(listOf<Record>()) }
 
         // State for the current date
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -78,11 +83,12 @@ class HomeActivity : ComponentActivity() {
         }
 
         fun addRecord() {
-            if (amount.isNotEmpty()) {
-                val newRecord = recordType to amount
+            if (amount.isNotEmpty() && description.isNotEmpty()) {
+                val newRecord = Record(recordType, amount, description)
                 records = records + newRecord
                 saveRecord(user?.uid, currentDate, firestore, newRecord)
                 amount = ""
+                description = ""
             }
         }
 
@@ -99,100 +105,112 @@ class HomeActivity : ComponentActivity() {
             }
         }
 
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
         ) {
-            Text("Welcome to the Home Screen!", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Logged in as: $email", style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("User ID: ${userID ?: "Loading..."}", style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(16.dp))
+            item {
+                Text("Welcome to the Home Screen!", style = MaterialTheme.typography.headlineMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Logged in as: $email", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("User ID: ${userID ?: "Loading..."}", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Date: $currentDate", style = MaterialTheme.typography.bodyMedium)
-            Spacer(modifier = Modifier.height(16.dp))
+                Text("Date: $currentDate", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                Button(onClick = { changeDate(-1) }) {
-                    Text("Previous Day")
-                }
-                Button(onClick = { changeDate(1) }) {
-                    Text("Next Day")
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = amount,
-                onValueChange = {
-                    if (it.all { char -> char.isDigit() }) {
-                        amount = it
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Button(onClick = { changeDate(-1) }) {
+                        Text("Previous Day")
                     }
-                },
-                label = { Text("輸入金額") },
-                keyboardOptions = KeyboardOptions.Default.copy(
-                    keyboardType = KeyboardType.Number
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                Button(onClick = { recordType = "Income" }) {
-                    Text("收入")
+                    Button(onClick = { changeDate(1) }) {
+                        Text("Next Day")
+                    }
                 }
-                Button(onClick = { recordType = "Expense" }) {
-                    Text("支出")
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = {
+                        if (it.all { char -> char.isDigit() }) {
+                            amount = it
+                        }
+                    },
+                    label = { Text("輸入金額") },
+                    keyboardOptions = KeyboardOptions.Default.copy(
+                        keyboardType = KeyboardType.Number
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("事由") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Button(onClick = { recordType = "Income" }) {
+                        Text("收入")
+                    }
+                    Button(onClick = { recordType = "Expense" }) {
+                        Text("支出")
+                    }
                 }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Button(
-                onClick = { addRecord() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Add Record")
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { addRecord() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Add Record")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                records.forEach { (type, amount) ->
-                    Text("$type: $$amount", style = MaterialTheme.typography.bodyMedium)
+                Text("Records:", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            items(records) { record ->
+                Column {
+                    Text("${record.type}: $${record.amount} - ${record.description}", style = MaterialTheme.typography.bodyMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
-            val totalIncome = records.filter { it.first == "Income" }.sumBy { it.second.toInt() }
-            val totalExpense = records.filter { it.first == "Expense" }.sumBy { it.second.toInt() }
-            val totalProfit = totalIncome - totalExpense
 
-            // 顯示總盈餘
-            Text("總盈餘: $totalProfit", style = MaterialTheme.typography.bodyMedium)
+            item {
+                val totalIncome = records.filter { it.type == "Income" }.sumBy { it.amount.toInt() }
+                val totalExpense = records.filter { it.type == "Expense" }.sumBy { it.amount.toInt() }
+                val totalProfit = totalIncome - totalExpense
 
+                // 顯示總盈餘
+                Text("總盈餘: $totalProfit", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Button(
-                onClick = { logout() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Logout")
+                Button(
+                    onClick = { logout() },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Logout")
+                }
             }
         }
     }
 
-    private fun loadRecords(uid: String, date: String, firestore: FirebaseFirestore, onRecordsLoaded: (List<Pair<String, String>>) -> Unit) {
+    private fun loadRecords(uid: String, date: String, firestore: FirebaseFirestore, onRecordsLoaded: (List<Record>) -> Unit) {
         firestore.collection("users").document(uid).collection("records").document(date).get()
             .addOnSuccessListener { document ->
                 val loadedRecords = document["records"] as? List<*>
@@ -200,7 +218,8 @@ class HomeActivity : ComponentActivity() {
                     if (record is Map<*, *>) {
                         val type = record["type"] as? String ?: ""
                         val amount = record["amount"] as? String ?: ""
-                        type to amount
+                        val description = record["description"] as? String ?: ""
+                        Record(type, amount, description)
                     } else {
                         null
                     }
@@ -212,13 +231,12 @@ class HomeActivity : ComponentActivity() {
             }
     }
 
-
-
-    private fun saveRecord(uid: String?, date: String, firestore: FirebaseFirestore, record: Pair<String, String>) {
+    private fun saveRecord(uid: String?, date: String, firestore: FirebaseFirestore, record: Record) {
         uid?.let {
             val recordData = hashMapOf(
-                "type" to record.first,
-                "amount" to record.second
+                "type" to record.type,
+                "amount" to record.amount,
+                "description" to record.description
             )
             val docRef = firestore.collection("users").document(it).collection("records").document(date)
             docRef.get().addOnSuccessListener { document ->
@@ -230,4 +248,5 @@ class HomeActivity : ComponentActivity() {
             }
         }
     }
+
 }
