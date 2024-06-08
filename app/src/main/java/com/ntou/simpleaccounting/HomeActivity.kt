@@ -60,6 +60,7 @@ class HomeActivity : ComponentActivity() {
         var description by remember { mutableStateOf("") }
         var recordType by remember { mutableStateOf("Income") }
         var records by remember { mutableStateOf(listOf<Record>()) }
+        var selectedRecord by remember { mutableStateOf<Record?>(null) }
 
         // State for the current date
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -92,16 +93,24 @@ class HomeActivity : ComponentActivity() {
             }
         }
 
-        fun changeDate(offset: Int) {
+        fun changeDate(offset: Int, unit: Int = Calendar.DAY_OF_YEAR) {
             val calendar = Calendar.getInstance().apply {
                 time = dateFormat.parse(currentDate) ?: Date()
-                add(Calendar.DAY_OF_YEAR, offset)
+                add(unit, offset)
             }
             currentDate = dateFormat.format(calendar.time)
             user?.uid?.let { uid ->
                 loadRecords(uid, currentDate, firestore) { loadedRecords ->
                     records = loadedRecords
                 }
+            }
+        }
+
+        fun deleteRecord(record: Record) {
+            user?.uid?.let { uid ->
+                val updatedRecords = records - record
+                records = updatedRecords
+                deleteRecordFromFirestore(uid, currentDate, firestore, record)
             }
         }
 
@@ -127,11 +136,17 @@ class HomeActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
+                    Button(onClick = { changeDate(-1, Calendar.MONTH) }) {
+                        Text("Previous Month")
+                    }
                     Button(onClick = { changeDate(-1) }) {
                         Text("Previous Day")
                     }
                     Button(onClick = { changeDate(1) }) {
                         Text("Next Day")
+                    }
+                    Button(onClick = { changeDate(1, Calendar.MONTH) }) {
+                        Text("Next Month")
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -186,7 +201,17 @@ class HomeActivity : ComponentActivity() {
 
             items(records) { record ->
                 Column {
-                    Text("${record.type}: $${record.amount} - ${record.description}", style = MaterialTheme.typography.bodyMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("${record.type}: $${record.amount} - ${record.description}", style = MaterialTheme.typography.bodyMedium)
+                        Button(
+                            onClick = { deleteRecord(record) }
+                        ) {
+                            Text("Delete")
+                        }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                 }
             }
@@ -249,4 +274,17 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
+    private fun deleteRecordFromFirestore(uid: String, date: String, firestore: FirebaseFirestore, record: Record) {
+        val recordData = hashMapOf(
+            "type" to record.type,
+            "amount" to record.amount,
+            "description" to record.description
+        )
+        val docRef = firestore.collection("users").document(uid).collection("records").document(date)
+        docRef.get().addOnSuccessListener { document ->
+            if (document.exists()) {
+                docRef.update("records", FieldValue.arrayRemove(recordData))
+            }
+        }
+    }
 }
