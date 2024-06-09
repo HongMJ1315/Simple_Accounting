@@ -60,7 +60,10 @@ class HomeActivity : ComponentActivity() {
         var description by remember { mutableStateOf("") }
         var recordType by remember { mutableStateOf("Income") }
         var records by remember { mutableStateOf(listOf<Record>()) }
-        var selectedRecord by remember { mutableStateOf<Record?>(null) }
+        var showDialog by remember { mutableStateOf(false) }
+        var monthlyIncome by remember { mutableStateOf(0) }
+        var monthlyExpense by remember { mutableStateOf(0) }
+        var netIncome by remember { mutableStateOf(0) }
 
         // State for the current date
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -111,6 +114,33 @@ class HomeActivity : ComponentActivity() {
                 val updatedRecords = records - record
                 records = updatedRecords
                 deleteRecordFromFirestore(uid, currentDate, firestore, record)
+            }
+        }
+
+        fun calculateMonthlyTotals(uid: String, date: String) {
+            val calendar = Calendar.getInstance().apply {
+                time = dateFormat.parse(date) ?: Date()
+                set(Calendar.DAY_OF_MONTH, 1)
+            }
+            val startDate = dateFormat.format(calendar.time)
+            calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
+            val endDate = dateFormat.format(calendar.time)
+
+            loadMonthlyRecords(uid, startDate, endDate, firestore) { monthlyRecords ->
+                var income = 0
+                var expense = 0
+                for (record in monthlyRecords) {
+                    val amount = record.amount.toIntOrNull() ?: 0
+                    if (record.type == "Income") {
+                        income += amount
+                    } else if (record.type == "Expense") {
+                        expense += amount
+                    }
+                }
+                monthlyIncome = income
+                monthlyExpense = expense
+                netIncome = income - expense
+                showDialog = true
             }
         }
 
@@ -195,6 +225,14 @@ class HomeActivity : ComponentActivity() {
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
+                Button(
+                    onClick = { user?.uid?.let { uid -> calculateMonthlyTotals(uid, currentDate) } },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("查看支出收入")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text("Records:", style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -233,6 +271,35 @@ class HomeActivity : ComponentActivity() {
                 }
             }
         }
+
+        if (showDialog) {
+            ShowMonthlySummaryDialog(
+                monthlyIncome = monthlyIncome,
+                monthlyExpense = monthlyExpense,
+                netIncome = netIncome,
+                onDismiss = { showDialog = false }
+            )
+        }
+    }
+
+    @Composable
+    fun ShowMonthlySummaryDialog(monthlyIncome: Int, monthlyExpense: Int, netIncome: Int, onDismiss: () -> Unit) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("月收入支出總覽") },
+            text = {
+                Column {
+                    Text("總收入: $$monthlyIncome")
+                    Text("總支出: $$monthlyExpense")
+                    Text("淨收入: $$netIncome")
+                }
+            },
+            confirmButton = {
+                Button(onClick = onDismiss) {
+                    Text("確定")
+                }
+            }
+        )
     }
 
     private fun loadRecords(uid: String, date: String, firestore: FirebaseFirestore, onRecordsLoaded: (List<Record>) -> Unit) {
@@ -254,6 +321,48 @@ class HomeActivity : ComponentActivity() {
             .addOnFailureListener {
                 onRecordsLoaded(emptyList())
             }
+    }
+
+    private fun loadMonthlyRecords(uid: String, startDate: String, endDate: String, firestore: FirebaseFirestore, onRecordsLoaded: (List<Record>) -> Unit) {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val startCalendar = Calendar.getInstance().apply {
+            time = dateFormat.parse(startDate) ?: Date()
+        }
+        val endCalendar = Calendar.getInstance().apply {
+            time = dateFormat.parse(endDate) ?: Date()
+        }
+        val recordsList = mutableListOf<Record>()
+        val dates = generateSequence(startCalendar) { calendar ->
+            calendar.takeIf { it.before(endCalendar) }?.apply { add(Calendar.DAY_OF_MONTH, 1) }
+        }.map { dateFormat.format(it.time) }.toList()
+
+        var remainingDates = dates.size
+
+        dates.forEach { date ->
+            firestore.collection("users").document(uid).collection("records").document(date).get()
+                .addOnSuccessListener { document ->
+                    val loadedRecords = document["records"] as? List<*>
+                    val convertedRecords = loadedRecords?.mapNotNull { record ->
+                        if (record is Map<*, *>) {
+                            val type = record["type"] as? String ?: ""
+                            val amount = record["amount"] as? String ?: ""
+                            val description = record["description"] as? String ?: ""
+                            Record(type, amount, description)
+                        } else {
+                            null
+                        }
+                    } ?: emptyList()
+                    recordsList.addAll(convertedRecords)
+                    if (--remainingDates == 0) {
+                        onRecordsLoaded(recordsList)
+                    }
+                }
+                .addOnFailureListener {
+                    if (--remainingDates == 0) {
+                        onRecordsLoaded(recordsList)
+                    }
+                }
+        }
     }
 
     private fun saveRecord(uid: String?, date: String, firestore: FirebaseFirestore, record: Record) {
