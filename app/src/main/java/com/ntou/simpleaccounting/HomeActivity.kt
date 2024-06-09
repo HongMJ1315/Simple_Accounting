@@ -235,23 +235,36 @@ class HomeActivity : ComponentActivity() {
 
                 Text("Records:", style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Add table header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("收入或支出", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text("金額", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text("事由", modifier = Modifier.weight(2f), style = MaterialTheme.typography.bodyMedium)
+                    Text("刪除", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             items(records) { record ->
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(record.type, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text(record.amount, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text(record.description, modifier = Modifier.weight(2f), style = MaterialTheme.typography.bodyMedium)
+                    Button(
+                        onClick = { deleteRecord(record) },
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text("${record.type}: $${record.amount} - ${record.description}", style = MaterialTheme.typography.bodyMedium)
-                        Button(
-                            onClick = { deleteRecord(record) }
-                        ) {
-                            Text("Delete")
-                        }
+                        Text("Delete")
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             item {
