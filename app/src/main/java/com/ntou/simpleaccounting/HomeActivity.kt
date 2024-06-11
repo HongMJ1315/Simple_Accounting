@@ -189,6 +189,19 @@ class HomeActivity : ComponentActivity() {
             }
         }
 
+        fun changeDate(offset: Int, unit: Int = Calendar.DAY_OF_YEAR) {
+            val calendar = Calendar.getInstance().apply {
+                time = dateFormat.parse(currentDate) ?: Date()
+                add(unit, offset)
+            }
+            currentDate = dateFormat.format(calendar.time)
+            user?.uid?.let { uid ->
+                loadRecords(uid, currentDate, firestore) { loadedRecords ->
+                    records = loadedRecords
+                }
+            }
+        }
+
         fun changeDate(year: Int, month: Int, day: Int) {
             calendar.set(year, month, day)
             currentDate = dateFormat.format(calendar.time)
@@ -262,9 +275,17 @@ class HomeActivity : ComponentActivity() {
                 Text("Date: $currentDate", style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Replace the date change buttons with a button to show the date picker
-                Button(onClick = { datePickerDialog.show() }) {
-                    Text("Select Date")
+                Row {
+                    Button(onClick = { changeDate( -1) }) {
+                        Text("Previous Day")
+                    }
+                    // Replace the date change buttons with a button to show the date picker
+                    Button(onClick = { datePickerDialog.show() }) {
+                        Text("Select Date")
+                    }
+                    Button(onClick = { changeDate( 1) }) {
+                        Text("Next Day")
+                    }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
