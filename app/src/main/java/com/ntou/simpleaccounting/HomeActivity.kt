@@ -21,9 +21,18 @@ import java.util.*
 import com.google.firebase.firestore.FieldValue
 import androidx.compose.foundation.lazy.items
 import android.app.DatePickerDialog
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 
 class HomeActivity : ComponentActivity() {
+
     data class Record(val type: String, val amount: String, val description: String)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +57,48 @@ class HomeActivity : ComponentActivity() {
         startActivity(intent)
         finish()
     }
+    private fun loadMonthlyRecords(uid: String, startDate: String, endDate: String, firestore: FirebaseFirestore, onRecordsLoaded: (List<Record>) -> Unit) {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val startCalendar = Calendar.getInstance().apply {
+            time = dateFormat.parse(startDate) ?: Date()
+        }
+        val endCalendar = Calendar.getInstance().apply {
+            time = dateFormat.parse(endDate) ?: Date()
+        }
+        val recordsList = mutableListOf<Record>()
+
+        val dates = generateSequence(startCalendar) { calendar ->
+            calendar.takeIf { it.before(endCalendar) }?.apply { add(Calendar.DAY_OF_MONTH, 1) }
+        }.map { dateFormat.format(it.time) }.toList()
+
+        var remainingDates = dates.size
+
+        dates.forEach { date ->
+            firestore.collection("users").document(uid).collection("records").document(date).get()
+                .addOnSuccessListener { document ->
+                    val loadedRecords = document["records"] as? List<*>
+                    val convertedRecords = loadedRecords?.mapNotNull { record ->
+                        if (record is Map<*, *>) {
+                            val type = record["type"] as? String ?: ""
+                            val amount = record["amount"] as? String ?: ""
+                            val description = record["description"] as? String ?: ""
+                            Record(type, amount, description)
+                        } else {
+                            null
+                        }
+                    } ?: emptyList()
+                    recordsList.addAll(convertedRecords)
+                    if (--remainingDates == 0) {
+                        onRecordsLoaded(recordsList)
+                    }
+                }
+                .addOnFailureListener {
+                    if (--remainingDates == 0) {
+                        onRecordsLoaded(recordsList)
+                    }
+                }
+        }
+    }
 
     @Composable
     fun HomeScreen() {
@@ -66,6 +117,12 @@ class HomeActivity : ComponentActivity() {
         var monthlyIncome by remember { mutableStateOf(0) }
         var monthlyExpense by remember { mutableStateOf(0) }
         var netIncome by remember { mutableStateOf(0) }
+
+        var showChart by remember { mutableStateOf(false) }
+
+        // State for storing daily income and expense data
+        var dailyIncomeData by remember { mutableStateOf(listOf<Float>()) }
+        var dailyExpenseData by remember { mutableStateOf(listOf<Float>()) }
 
         // State for the current date
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -88,6 +145,34 @@ class HomeActivity : ComponentActivity() {
                     .addOnFailureListener {
                         userID = "Failed to fetch userID"
                     }
+            }
+        }
+
+        // Function to calculate daily totals for the chart
+        fun calculateDailyTotalsForChart(uid: String, date: String) {
+            val calendar = Calendar.getInstance().apply {
+                time = dateFormat.parse(date) ?: Date()
+                set(Calendar.DAY_OF_MONTH, 1)
+            }
+            val startDate = dateFormat.format(calendar.time)
+            calendar.set(Calendar.DAY_OF_MONTH, calendar.getActualMaximum(Calendar.DAY_OF_MONTH))
+            val endDate = dateFormat.format(calendar.time)
+
+            loadDailyRecords(uid, startDate, endDate, firestore) { dailyRecords ->
+                val incomeList = MutableList(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)) { 0f }
+                val expenseList = MutableList(calendar.getActualMaximum(Calendar.DAY_OF_MONTH)) { 0f }
+                for (record in dailyRecords) {
+                    val amount = record.amount.toFloatOrNull() ?: 0f
+                    val day = SimpleDateFormat("d", Locale.getDefault()).format(dateFormat.parse(record.date)).toInt() - 1
+                    if (record.type == "Income") {
+                        incomeList[day] += amount
+                    } else if (record.type == "Expense") {
+                        expenseList[day] += amount
+                    }
+                }
+                dailyIncomeData = incomeList
+                dailyExpenseData = expenseList
+                showChart = true
             }
         }
 
@@ -281,6 +366,19 @@ class HomeActivity : ComponentActivity() {
                 ) {
                     Text("Logout")
                 }
+                // 按下"Visualize Income/Expense"後，調用函數計算月度總額，並顯示圖表
+                Button(
+                    onClick = { user?.uid?.let { uid -> calculateDailyTotalsForChart(uid, currentDate) } },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Visualize Income/Expense")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (showChart) {
+                    LineChart(dailyIncomeData, dailyExpenseData)
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
         }
 
@@ -293,6 +391,7 @@ class HomeActivity : ComponentActivity() {
             )
         }
     }
+
     @Composable
     fun ShowMonthlySummaryDialog(monthlyIncome: Int, monthlyExpense: Int, netIncome: Int, onDismiss: () -> Unit) {
         AlertDialog(
@@ -334,7 +433,7 @@ class HomeActivity : ComponentActivity() {
             }
     }
 
-    private fun loadMonthlyRecords(uid: String, startDate: String, endDate: String, firestore: FirebaseFirestore, onRecordsLoaded: (List<Record>) -> Unit) {
+    private fun loadDailyRecords(uid: String, startDate: String, endDate: String, firestore: FirebaseFirestore, onRecordsLoaded: (List<RecordWithDate>) -> Unit) {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val startCalendar = Calendar.getInstance().apply {
             time = dateFormat.parse(startDate) ?: Date()
@@ -342,7 +441,7 @@ class HomeActivity : ComponentActivity() {
         val endCalendar = Calendar.getInstance().apply {
             time = dateFormat.parse(endDate) ?: Date()
         }
-        val recordsList = mutableListOf<Record>()
+        val recordsList = mutableListOf<RecordWithDate>()
         val dates = generateSequence(startCalendar) { calendar ->
             calendar.takeIf { it.before(endCalendar) }?.apply { add(Calendar.DAY_OF_MONTH, 1) }
         }.map { dateFormat.format(it.time) }.toList()
@@ -358,7 +457,7 @@ class HomeActivity : ComponentActivity() {
                             val type = record["type"] as? String ?: ""
                             val amount = record["amount"] as? String ?: ""
                             val description = record["description"] as? String ?: ""
-                            Record(type, amount, description)
+                            RecordWithDate(type, amount, description, date)
                         } else {
                             null
                         }
@@ -375,6 +474,8 @@ class HomeActivity : ComponentActivity() {
                 }
         }
     }
+
+    data class RecordWithDate(val type: String, val amount: String, val description: String, val date: String)
 
     private fun saveRecord(uid: String?, date: String, firestore: FirebaseFirestore, record: Record) {
         uid?.let {
@@ -405,6 +506,39 @@ class HomeActivity : ComponentActivity() {
             if (document.exists()) {
                 docRef.update("records", FieldValue.arrayRemove(recordData))
             }
+        }
+    }
+
+    @Composable
+    fun LineChart(incomeData: List<Float>, expenseData: List<Float>) {
+        val maxDaysInMonth = Calendar.getInstance().getActualMaximum(Calendar.DAY_OF_MONTH)
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .background(Color.White)
+        ) {
+            val maxValue = (incomeData + expenseData).maxOrNull() ?: 0f
+            val stepX = size.width / maxDaysInMonth
+            val stepY = size.height / maxValue
+
+            val incomePath = Path().apply {
+                moveTo(0f, size.height)
+                incomeData.forEachIndexed { index, value ->
+                    lineTo(index * stepX, size.height - (value * stepY))
+                }
+            }
+
+            val expensePath = Path().apply {
+                moveTo(0f, size.height)
+                expenseData.forEachIndexed { index, value ->
+                    lineTo(index * stepX, size.height - (value * stepY))
+                }
+            }
+
+            drawPath(incomePath, Color.Red, style = Stroke(width = 2f))
+            drawPath(expensePath, Color.Green, style = Stroke(width = 2f))
         }
     }
 }
