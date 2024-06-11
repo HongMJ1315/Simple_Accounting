@@ -21,6 +21,7 @@ import java.util.*
 import com.google.firebase.firestore.FieldValue
 import androidx.compose.foundation.lazy.items
 import android.app.DatePickerDialog
+import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -29,6 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 
 class HomeActivity : ComponentActivity() {
@@ -539,6 +542,42 @@ class HomeActivity : ComponentActivity() {
 
             drawPath(incomePath, Color.Red, style = Stroke(width = 2f))
             drawPath(expensePath, Color.Green, style = Stroke(width = 2f))
+
+            // Draw date labels
+            val textPaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.BLACK
+                textSize = 20f
+                textAlign = android.graphics.Paint.Align.CENTER
+            }
+
+            for (day in 1..maxDaysInMonth) {
+                val x = (day - 1) * stepX
+                drawContext.canvas.nativeCanvas.drawText(
+                    day.toString(),
+                    x,
+                    size.height - 5f, // Adjust the Y position as needed
+                    textPaint
+                )
+            }
+
+            // Draw amount labels
+            val yStep = maxValue / 5  // Divide Y-axis into 5 steps
+            val yLabelPaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.BLACK
+                textSize = 20f
+                textAlign = android.graphics.Paint.Align.RIGHT
+            }
+
+            for (i in 0..5) {
+                val y = size.height - (i * stepY * yStep)
+                drawContext.canvas.nativeCanvas.drawText(
+                    (i * yStep).toInt().toString(),
+                    50f, // Adjust the X position as needed
+                    y,
+                    yLabelPaint
+                )
+            }
         }
     }
+
 }
