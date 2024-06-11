@@ -20,6 +20,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 import com.google.firebase.firestore.FieldValue
 import androidx.compose.foundation.lazy.items
+import android.app.DatePickerDialog
+import androidx.compose.ui.platform.LocalContext
 
 class HomeActivity : ComponentActivity() {
     data class Record(val type: String, val amount: String, val description: String)
@@ -69,6 +71,9 @@ class HomeActivity : ComponentActivity() {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         var currentDate by remember { mutableStateOf(dateFormat.format(Date())) }
 
+        val context = LocalContext.current
+        val calendar = Calendar.getInstance()
+
         LaunchedEffect(user) {
             user?.uid?.let { uid ->
                 firestore.collection("users").document(uid).get()
@@ -96,11 +101,8 @@ class HomeActivity : ComponentActivity() {
             }
         }
 
-        fun changeDate(offset: Int, unit: Int = Calendar.DAY_OF_YEAR) {
-            val calendar = Calendar.getInstance().apply {
-                time = dateFormat.parse(currentDate) ?: Date()
-                add(unit, offset)
-            }
+        fun changeDate(year: Int, month: Int, day: Int) {
+            calendar.set(year, month, day)
             currentDate = dateFormat.format(calendar.time)
             user?.uid?.let { uid ->
                 loadRecords(uid, currentDate, firestore) { loadedRecords ->
@@ -144,6 +146,16 @@ class HomeActivity : ComponentActivity() {
             }
         }
 
+        val datePickerDialog = DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                changeDate(year, month, dayOfMonth)
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        )
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -162,22 +174,9 @@ class HomeActivity : ComponentActivity() {
                 Text("Date: $currentDate", style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Button(onClick = { changeDate(-1, Calendar.MONTH) }) {
-                        Text("Previous Month")
-                    }
-                    Button(onClick = { changeDate(-1) }) {
-                        Text("Previous Day")
-                    }
-                    Button(onClick = { changeDate(1) }) {
-                        Text("Next Day")
-                    }
-                    Button(onClick = { changeDate(1, Calendar.MONTH) }) {
-                        Text("Next Month")
-                    }
+                // Replace the date change buttons with a button to show the date picker
+                Button(onClick = { datePickerDialog.show() }) {
+                    Text("Select Date")
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -294,7 +293,6 @@ class HomeActivity : ComponentActivity() {
             )
         }
     }
-
     @Composable
     fun ShowMonthlySummaryDialog(monthlyIncome: Int, monthlyExpense: Int, netIncome: Int, onDismiss: () -> Unit) {
         AlertDialog(
