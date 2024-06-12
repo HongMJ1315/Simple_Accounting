@@ -444,9 +444,9 @@ class HomeActivity : ComponentActivity() {
             title = { Text(stringResource(id = R.string.monthly_summary)) },
             text = {
                 Column {
-                    Text(stringResource(id = R.string.total_income, monthlyIncome))
-                    Text(stringResource(id = R.string.total_expense, monthlyExpense))
-                    Text(stringResource(id = R.string.net_income, netIncome))
+                    Text(stringResource(id = R.string.total_income, monthlyIncome) + "$")
+                    Text(stringResource(id = R.string.total_expense, monthlyExpense) + "$")
+                    Text(stringResource(id = R.string.net_income, netIncome) + "$")
                 }
             },
             confirmButton = {

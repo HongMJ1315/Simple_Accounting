@@ -158,6 +158,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done
                 ),
+                visualTransformation = PasswordVisualTransformation(),
                 decorationBox = { innerTextField ->
                     Box(
                         Modifier

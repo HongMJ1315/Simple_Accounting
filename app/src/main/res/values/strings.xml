@@ -5,7 +5,7 @@
     <string name="title_activity_home">HomeActivity</string>
     <string name="app_name">Simple Accounting</string>
     <string name="welcome_message">Welcome to the Home Screen!</string>
-    <string name="logged_in_as">Logged in as:</string>
+    <string name="logged_in_as">Logged in as: %1$s</string>
     <string name="user_id">User ID:</string>
     <string name="date">Date:</string>
     <string name="previous_day">Previous Day</string>
@@ -18,14 +18,14 @@
     <string name="add_record">Add Record</string>
     <string name="view_income_expense">View Income/Expense</string>
     <string name="records">Records:</string>
-    <string name="total_profit">Total Profit:</string>
+    <string name="total_profit">Total Profit: %1$d</string>
     <string name="logout">Logout</string>
     <string name="visualize">Visualize Income/Expense</string>
     <string name="delete">Delete</string>
     <string name="monthly_summary">Monthly Summary</string>
-    <string name="total_income">Total Income:</string>
-    <string name="total_expense">Total Expense:</string>
-    <string name="net_income">Net Income:</string>
+    <string name="total_income">Total Income: %1$d</string>
+    <string name="total_expense">Total Expense: %1$d</string>
+    <string name="net_income">Net Income: %1$d</string>
     <string name="confirm">Confirm</string>
     <string name="failed_to_fetch_user_id">Fail to Fetch User ID</string>
     <string name="no_email">No Email Available</string>
