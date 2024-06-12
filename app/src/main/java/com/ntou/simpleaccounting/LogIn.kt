@@ -13,8 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -72,7 +74,18 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var userID by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("") }
+    var messageIndex by remember { mutableIntStateOf(0)}
+    val messageStrings = listOf(
+        stringResource(id = R.string.login_successful),
+        stringResource(id = R.string.login_failed),
+        stringResource(id = R.string.registration_successful),
+        stringResource(id = R.string.save_user_data_failed),
+        stringResource(id = R.string.registration_failed),
+        stringResource(id = R.string.user_id_exists),
+        stringResource(id = R.string.error_checking_user_id),
+        stringResource(id = R.string.passwords_do_not_match),
+    )
+    var message = messageStrings[messageIndex]
     var isLoginMode by remember { mutableStateOf(true) }
 
     Column(
@@ -81,7 +94,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.Center
     ) {
-        Text(if (isLoginMode) "Login" else "Register", style = MaterialTheme.typography.headlineMedium)
+        Text(if (isLoginMode) stringResource(id = R.string.login) else stringResource(id = R.string.register), style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
         BasicTextField(
             value = email,
@@ -101,7 +114,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
                     if (email.isEmpty()) {
-                        Text("Email", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(id = R.string.email), style = MaterialTheme.typography.bodyMedium)
                     }
                     innerTextField()
                 }
@@ -118,6 +131,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                 keyboardType = KeyboardType.Password,
                 imeAction = ImeAction.Done
             ),
+            visualTransformation = PasswordVisualTransformation(),
             decorationBox = { innerTextField ->
                 Box(
                     Modifier
@@ -126,7 +140,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                         .background(MaterialTheme.colorScheme.surface)
                 ) {
                     if (password.isEmpty()) {
-                        Text("Password", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(id = R.string.password), style = MaterialTheme.typography.bodyMedium)
                     }
                     innerTextField()
                 }
@@ -152,7 +166,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                             .background(MaterialTheme.colorScheme.surface)
                     ) {
                         if (confirmPassword.isEmpty()) {
-                            Text("Confirm Password", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(id = R.string.password), style = MaterialTheme.typography.bodyMedium)
                         }
                         innerTextField()
                     }
@@ -177,7 +191,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                             .background(MaterialTheme.colorScheme.surface)
                     ) {
                         if (userID.isEmpty()) {
-                            Text("User ID", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(id = R.string.user_id), style = MaterialTheme.typography.bodyMedium)
                         }
                         innerTextField()
                     }
@@ -191,10 +205,11 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                     auth.signInWithEmailAndPassword(email, password)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
-                                message = "Login successful!"
+                                messageIndex = 0
                                 onLoginSuccess()
                             } else {
-                                message = "Login failed: ${task.exception?.message}"
+                                messageIndex = 1
+                                message += ": ${task.exception?.message}"
                             }
                         }
                 } else {
@@ -217,35 +232,39 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                                                     firestore.collection("users").document(user!!.uid).set(userData)
                                                         .addOnCompleteListener { userTask ->
                                                             if (userTask.isSuccessful) {
-                                                                message = "Registration successful!"
+                                                                messageIndex = 2
                                                                 onLoginSuccess()
                                                             } else {
-                                                                message = "Failed to save user data: ${userTask.exception?.message}"
+                                                                messageIndex = 3
+                                                                message += ": ${userTask.exception?.message}"
                                                             }
                                                         }
                                                 } else {
-                                                    message = "Registration failed: ${task.exception?.message}"
+                                                    messageIndex = 4
+                                                    message += ": ${task.exception?.message}"
                                                 }
                                             }
                                     } else {
-                                        message = "User ID already exists. Please choose a different one."
+                                        messageIndex = 5
                                     }
                                 } else {
-                                    message = "Error checking User ID: ${task.exception?.message}"
+                                    messageIndex = 6
+                                    message += ": ${task.exception?.message}"
                                 }
                             }
                     } else {
-                        message = "Passwords do not match"
+                        messageIndex = 7
                     }
                 }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (isLoginMode) "Login" else "Register")
+
+            Text(if (isLoginMode) stringResource(id = R.string.login) else stringResource(id = R.string.register))
         }
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(onClick = { isLoginMode = !isLoginMode }) {
-            Text(if (isLoginMode) "Switch to Register" else "Switch to Login")
+            Text(if (isLoginMode)  stringResource(id = R.string.switch_to_register) else  stringResource(id = R.string.switch_to_login))
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(message, style = MaterialTheme.typography.bodyMedium)
