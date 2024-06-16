@@ -21,6 +21,7 @@ import java.util.*
 import com.google.firebase.firestore.FieldValue
 import androidx.compose.foundation.lazy.items
 import android.app.DatePickerDialog
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
@@ -65,7 +66,6 @@ class HomeActivity : ComponentActivity() {
             time = dateFormat.parse(endDate) ?: Date()
         }
         val recordsList = mutableListOf<Record>()
-
         val dates = generateSequence(startCalendar) { calendar ->
             calendar.takeIf { it.before(endCalendar) }?.apply { add(Calendar.DAY_OF_MONTH, 1) }
         }.map { dateFormat.format(it.time) }.toList()
@@ -112,9 +112,10 @@ class HomeActivity : ComponentActivity() {
         var description by remember { mutableStateOf("") }
 
         val recordTypeStrings = listOf(
-            stringResource(id = R.string.income),
-            stringResource(id = R.string.expense)
+            "Income",
+            "Expense"
         )
+
         var recordTypeIndex by remember { mutableIntStateOf(0) }
         val recordType = recordTypeStrings[recordTypeIndex]
 
@@ -243,6 +244,7 @@ class HomeActivity : ComponentActivity() {
                         expense += amount
                     }
                 }
+                Log.d("MonthlySummary", "Income: $income, Expense: $expense")
                 monthlyIncome = income
                 monthlyExpense = expense
                 netIncome = income - expense
@@ -268,8 +270,8 @@ class HomeActivity : ComponentActivity() {
             horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
         ) {
             item {
-                Text(stringResource(id = R.string.welcome_message), style = MaterialTheme.typography.headlineMedium)
-                Spacer(modifier = Modifier.height(16.dp))
+//                Text(stringResource(id = R.string.welcome_message), style = MaterialTheme.typography.headlineMedium)
+//                Spacer(modifier = Modifier.height(16.dp))
                 Text(stringResource(id = R.string.logged_in_as, email), style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("${stringResource(id = R.string.user_id)}: ${userID ?: "Loading..."}", style = MaterialTheme.typography.bodyMedium)
@@ -409,7 +411,7 @@ class HomeActivity : ComponentActivity() {
                     LineChart(dailyIncomeData, dailyExpenseData)
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+//                Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
                     onClick = { logout() },
